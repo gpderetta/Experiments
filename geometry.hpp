@@ -2,32 +2,85 @@
 # define EB_GEOMETRY_HPP
 namespace eb {
 
-    template<typename Value, int Dim, typename Tag>
-    class array {        
-        typedef Value value_type;
-        value_type v[Dim];
-    };
+  typedef float angle;
 
-    struct univ;
-    typedef array<float, 2, univ> v2f;
-    typedef array<float, 2, univ> p2f;
-    typedef array<float, 2, univ> a2f;
+  struct vector {
+    float x, y, z;
+
+    void test() const {}
     
-    template<typename Tag, typename T>
-    array<T, 2, Tag>
-    make(T x, T y) {
-        array<T, 2, Tag> r = {x,y};
-        return r;
+    vector(double x, double y, double z = 0)
+     : x(x),y(y),z(z) { test() }
+    vector& operator *=(double rhs) {
+      x *= rhs;
+      y *= rhs;
+      z *= rhs;
+      test();
+      return *this;
+    }
+    
+    friend
+    vector operator *(vector lhs, double rhs) {
+      return lhs *= rhs;
+    } 
+    friend
+    double norm_2(vector v) {
+      v.test();
+      return std::sqrt(v.x*v.x + 
+		       v.y*v.y + 
+		       v.z*v.z);
+    } 
+  };
+
+  struct point {
+    double x, y, z;
+
+    void test();
+    
+    point(double x, double y, double z = 0) 
+      :x(x), y(y), z(z) { test(); }
+
+    point& operator +=(vector rhs) {
+      x+=rhs.x;
+      y+=rhs.y;
+      z+=rhs.z;
+      test();
+      return *this;
     }
 
-    template<typename Tag, typename T>
-    array<T, 3, Tag>
-    make(T x, T y, T z) {
-        array<T, 3, Tag> r = {x,y,z};
-        return r;
+    point& operator -=(vector rhs) {
+      x-=rhs.x;
+      y-=rhs.y;
+      z-=rhs.z;
+      test();
+      return *this;
     }
 
+    friend
+    vector operator-(point lhs, point rhs) {
+      lhs.test();
+      rhs.test();
+      vector r (lhs.x-rhs.x,
+		lhs.y-rhs.y,
+		lhs.z-rhs.z);
+      return r;
+    }
 
-    
+    friend point operator+(point lhs, vector rhs) {
+      point r(lhs);
+      r+=rhs;
+      return r;
+    }
+  };
+
+  vector
+  make_unit_vector(angle rho, angle tau) {
+    vector r ( std::sin(rho) * std::cos(tau),
+	       std::sin(rho) * std::sin(tau),
+	       std::cos(rho) );
+    return r;
+  } 
+
+
 }
 #endif 
