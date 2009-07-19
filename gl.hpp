@@ -5,29 +5,34 @@
 #ifndef GL_GPD2009715_H
 # define GL_GPD2009715_H
 #include "color.hpp"
+#include "geometry.hpp"
+#include <string>
+#include <boost/noncopyable.hpp>
 namespace eb {
 namespace gl {
 
 struct texture { unsigned int id;};
 
-struct graphic_context {
+struct graphic_context : boost::noncopyable {
   graphic_context();
   void resize_window(int, int);
   void reset();
   void swap_buffers();
   ~graphic_context();
-  texture load_texture(const std::string& =
+  texture load_textures(const std::string& =
                        "data/particle.bmp");
-  void bind_texture(texture const&);
+  void bind_texture(texture const&) const;
+//private:
+  texture tex;
 };
 
 
 
 void draw_dot(const graphic_context&,
-              const position p, 
+              const point p, 
               const color c = color(1,1,1),
-              const float alpha = 1.0f,
-              const float radius = 0.5f)
+              const float alpha = 1.f,
+              const float radius = 10.f);
 
 }}
 #endif // GL_GPD2009715_H
