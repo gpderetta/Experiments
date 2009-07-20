@@ -24,6 +24,8 @@ struct graphic_context : boost::noncopyable {
   void bind_texture(texture const&) const;
 //private:
   texture tex;
+  int width;
+  int height;
 };
 
 
@@ -31,7 +33,6 @@ struct graphic_context : boost::noncopyable {
 void draw_dot(const graphic_context&,
               const point p, 
               const color c = color(1,1,1),
-              const float alpha = 1.f,
               const float radius = 10.f);
 
 }}
