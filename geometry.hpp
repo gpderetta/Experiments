@@ -91,7 +91,7 @@ struct vector {
 
   
   friend real atan2(vector v){
-    return atan2(v.x, v.y);
+    return atan2(v.y, v.x);
   }
 
 };
