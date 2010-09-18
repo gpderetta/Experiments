@@ -47,12 +47,10 @@ struct vector {
     return lhs *= rhs;
   } 
 
-  vector& operator -() {
-    x = -x;
-    y = -y;
-    z = -z;
-    test();
-    return *this;
+  vector operator -() {
+    vector result ( -x, -y, -z);
+    result.test();
+    return result;
   }
 
   friend std::ostream&operator<<(std::ostream&o, vector v) {
