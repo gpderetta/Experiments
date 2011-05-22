@@ -5,7 +5,7 @@
 # include <cstring>
 namespace eb {
 
-typedef float real;
+typedef double real;
 typedef real angle;
 
 
@@ -28,8 +28,9 @@ struct vector {
 
   void test() const {}
 
-  vector() : x(0), y(0), z(0) {}
-  vector(real x, real y, real z = 0)
+    //vector() = default;
+    vector() : x(0), y(0), z(0) {}
+  vector(real x, real y, real z )
    : x(x),y(y),z(z) { test(); }
   vector& operator *=(real rhs) {
     x *= rhs;
@@ -54,7 +55,7 @@ struct vector {
   }
 
   friend std::ostream&operator<<(std::ostream&o, vector v) {
-    return o << "("<<v.x<<", "<<v.y<<")";
+    return o << "("<<v.x<<", "<<v.y<<", "<<v.z<<")";
   }
   
   vector& operator /=(real rhs) {
@@ -102,12 +103,13 @@ struct vector {
   }
 
   friend
+  real inorm_2(vector v) {
+    return inv_sqrt(inner_prod(v,v));
+  }
+
+  friend
   vector versor(vector v) {
-# ifdef EB_SLOW
     return v /= norm_2(v);
-# else
-    return v *= inv_sqrt(inner_prod(v));
-# endif 
   }
   
   
@@ -121,9 +123,9 @@ struct vector {
   }
 
   friend
-  vector rotate(vector v, float angle) {
+  vector rotate(vector v, real angle) {
     return vector(v.x*cos(angle)-v.y*sin(angle),
-                  v.x*sin(angle)+v.y*cos(angle));
+                  v.x*sin(angle)+v.y*cos(angle), 0);
   }
   
   friend
@@ -144,9 +146,10 @@ struct point {
   real x, y, z;
 
   friend std::ostream&operator<<(std::ostream&o, point v) {
-    return o << "("<<v.x<<", "<<v.y<<")";
+    return o << "("<<v.x<<", "<<v.y<<", "<<v.z<<")";
   }
 
+    point() : x(0), y(0), z(0) {}
   
   void test(){}
     
@@ -165,6 +168,14 @@ struct point {
     x*=rhs.x;
     y*=rhs.y;
     z*=rhs.z;
+    test();
+    return *this;
+  }
+
+  point& operator /=(vector rhs) {
+    x/=rhs.x;
+    y/=rhs.y;
+    z/=rhs.z;
     test();
     return *this;
   }
@@ -188,6 +199,9 @@ struct point {
   }
   friend point operator*(point lhs, vector rhs) {
     return lhs*=rhs;
+  }
+    friend point operator/(point lhs, vector rhs) {
+    return lhs/=rhs;
   }
 
 };
