@@ -208,5 +208,21 @@ struct atomic {
     volatile T val;
 };
 
+// store hoist barrier
+// #loadstore | #storestore
+// prevent prior operations to be ordered after this op
+template<class T>
+void store_release(atomic<T*>& x, T* value) {
+    x.store(value, memory_order_release);
+}
+
+// load sink barrier
+// #loadload | #loadstore
+// prevent subsequent operations of being reordered before this load
+template<class T>
+T load_acquire(const atomic<T>& x) {
+    return x.load(memory_order_acquire);
+}
+
 }
 #endif
