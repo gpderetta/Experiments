@@ -187,9 +187,9 @@ struct atomic {
         case memory_order_seq_cst:
         default:
         {
-            atomic_thread_fence();
+            atomic_signal_fence();
             T ret = val;
-            atomic_thread_fence();
+            atomic_signal_fence();
             return ret;
         }
         }
