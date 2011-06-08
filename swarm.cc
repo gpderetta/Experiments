@@ -8,155 +8,11 @@
 #include <cmath>
 #include <cassert>
 #include <vector>
+#include <list>
 #include <iostream>
-#include <boost/foreach.hpp>
 #include <boost/next_prior.hpp>
-#include <boost/random/mersenne_twister.hpp>
-#include <boost/random/variate_generator.hpp>
-#include <boost/random/uniform_int.hpp>
-#include <boost/random/uniform_real.hpp>
-#include <boost/random/normal_distribution.hpp>
 #include "macros.hpp"
 namespace eb {namespace swarm{
-template<typename T>
-T square(T x) { return x*x; }
-
-real absclamp(real x, real min, real max) {
-    return x >= 0
-        ? std::min(std::max(x, min), max)
-        : std::max(std::min(x,-min),-max)
-        ;
-}
-
-template<class T>
-T absclamp(T val, real min, real max) {
-    real norm = norm_2(val);
-    real scaled_norm = absclamp(norm, min, max);
-    return val * (scaled_norm / norm) ;
-}
-
-
-static const int  num_charges = 3;
-typedef std::array<real, num_charges> charges_t;
-
-
-
-const int max_fps = 40; 
-const int min_fps =  16;
-
-const real desired_dt =  0.1;
-
-struct boid;
-typedef std::function<void(boid&)> action_t;
-struct boid {
-    boid(action_t action, 
-         point position,
-         vector velocity,
-         color c, float mass, charges_t const& charges)
-        : action(action)
-        , m_life(0)
-        , m_color(c)
-        , m_mass(mass)   
-        , m_charges(charges)
-        , m_position(position)
-        , m_old_force()
-        , m_force()
-        , m_velocity(velocity)
-    {   }
-
-    action_t action;
-    real m_life;
-    color m_color;
-    real m_mass;
-    charges_t m_charges;
-    point m_position;
-    vector m_old_force;
-    vector m_force;
-    vector m_velocity;
-
-
-};
-
-struct spring_arm {
-    spring_arm(int a, int b,
-               real len,
-               real k,
-               real c) 
-        : a_index(a)
-        , b_index(b)
-        , arm_len(len)
-        , spring_constant(k)
-        , damp_factor(c) {}
-    int a_index;
-    int b_index;
-    real arm_len;  
-    real spring_constant;
-    real damp_factor;
-};
-
-
-boost::mt19937 global_rng;
-boost::uniform_real<> uni;
-int my_random(int top, int low = 0) {
-    boost::uniform_int<> uni(low,top-1);
-    boost::variate_generator<
-    boost::mt19937&, boost::uniform_int<>
-        > die(global_rng, uni);
-return die();                 
-}
-
-    double my_frandom(double max, double min=0) {
-        boost::uniform_real<> uni(min, max);
-        return uni(global_rng); 
-    }
-
-double my_nrandom(double avg = 0, double dev = 1) {
-    boost::normal_distribution<> norm(avg, dev);
-    boost::uniform_real<> uni(0,1);
-    boost::variate_generator<boost::mt19937&, boost::uniform_real<> > vg(global_rng, uni);
-    double r = norm(vg);
-    return r;
-}
-
-color random_boid_color() {
-    return { my_frandom(1., 0.),
-            my_frandom(1., 0.),
-            my_frandom(1., 0.),
-            0.5};
-}
-
-template<class T>
-struct signature2tuple;
-
-template<class A, class T, class...Args>
-struct signature2tuple<T(A::*)(boid&, Args...) const> {
-    typedef std::tuple<Args...> type;
-};
-
-template<class...Args>
-struct mytuple {
-    mytuple(Args... x)
-        : tup(x...) {}
-
-    template<class F, int... I>
-    action_t do_bind(F f, gpd::details::index_tuple<I...>) const 
-    { return std::bind(f, std::placeholders::_1, std::get<I>(tup)...); };
-    
-
-    std::tuple<Args...> tup;
-
-    template<class F>
-    friend auto operator%(F f, mytuple t) -> action_t
-    { return t.do_bind(f, gpd::details::indices(t.tup) ); }
-} ;
-
-template<class...Args>
-auto with(Args... args) -> mytuple<Args...> {
-    return mytuple<Args...>(args...);
-};
-
-void nil(boid&) {}
-
 
 struct state_impl {
     state_impl(int width, int height);
@@ -172,30 +28,25 @@ private:
     void compute_elastic_forces();
     void init_time();
     double get_time() const;
+    template<class B, class T>
+    vector compute_gravitational_force(const B& b, const T& t);
+    
+    color random_boid_color(rng_t& rng) {
+        return { frandom(rng,1., 0.),
+                frandom(rng,1., 0.),
+                frandom(rng,1., 0.),
+                0.5};
+    }
 
-
-    struct world_t {
-        world_t() 
-            : constants{ 0.0001, 0.000001, -0.000001 }
-            , max_speed(0.3)
-            , damp(0.8)
-            , viscosity(0.)
-            , min_distance(0.001)
-        {}
-
-        real constants[num_charges];
-        real max_speed;
-        real damp; 
-        real viscosity; 
-        real min_distance;
-
-        real mass_gamma(vector v) const {
-            return max_speed / std::sqrt(std::max(0.00001, square(max_speed) - inner_prod(v)));
-        }
-
-    };
-
-    world_t m_world;
+    charges_t constants;
+    real max_speed;
+    real damp; 
+    real viscosity; 
+    real min_distance;
+    
+    real mass_gamma(vector v) const {
+        return max_speed / std::sqrt(std::max(0.00001, square(max_speed) - inner_prod(v)));
+    }
 
     unsigned long delay;
     int width;
@@ -218,9 +69,19 @@ private:
     int draw_delay_accum;
     int draw_nframes;
 
-    std::vector<boid> boids;
+    typedef std::function<bool(state_impl&)> actor_t;
+    std::vector<std::reference_wrapper<boid>> boids;
+    std::list<actor_t> actors;
     std::vector<spring_arm> springs;
     ::timeval startup_time;
+
+    // actor interface
+    void put_boid(boid& b) {
+        boids.push_back(std::ref(b));
+    }
+
+    void put_actor(actor_t
+
 };
 
 
@@ -229,25 +90,23 @@ void state_impl::init_boids(int , int , int ){
     // XXX
 
     struct {
-        action_t action;
         int count;
         color c;
         real mass;
         charges_t charges;
     } values [] = {
 //#include "blobs.m"
-#include "sine.m"
+//#include "sine.m"
     } ;
 
     for(auto x : values)
         for(int i = 0; i < x.count; ++i)
             boids.push_back
-                (boid(x.action,
-                      point(my_frandom(x_max*0.99, x_max*0.01),
-                            my_frandom(y_max*0.99, y_max*0.01),
-                            0),
-                      vector(0,0,0),
-                      x.c, x.mass, x.charges))
+                (std::ref(*new boid(point(my_frandom(x_max*0.99, x_max*0.01),
+                                          my_frandom(y_max*0.99, y_max*0.01),
+                                          0),
+                                    vector(0,0,0),
+                                    x.c, x.mass, x.charges)))
                 ;
     // springs.push_back(spring_arm(0, 1, 0.1, 8, 10));
     // springs.push_back(spring_arm(0, 2, 0.13, 8, 10));
@@ -294,7 +153,7 @@ struct boid_parameters {
 
 
 void state_impl::draw_boids(world&w) {
-    BOOST_FOREACH(boid& b, boids) {
+    for(boid& b : boids) {
         gl::draw_dot(w, b.m_position, b.m_color, 5.);
     }
 }
@@ -302,7 +161,7 @@ void state_impl::draw_boids(world&w) {
 
 
 void state_impl::check_limits(boid& b) const { 
-    b.m_velocity = absclamp(b.m_velocity, 0, m_world.max_speed);
+    b.m_velocity = absclamp(b.m_velocity, 0, max_speed);
     bool bounce = false;
     /* check limits on targets */
     if (b.m_position.x < 0) {
@@ -334,7 +193,7 @@ void state_impl::check_limits(boid& b) const {
     }
 
     if(bounce)
-        b.m_velocity *= m_world.damp;
+        b.m_velocity *= damp;
 }
 
 
@@ -351,9 +210,9 @@ vector limit_magnitude(vector v, real max) {
 }
 
 void state_impl::verlet_step_a(real dt) {
-    for(auto &b: boids) {
+    for(boid &b: boids) {
         check_limits(b);
-        real gamma = m_world.mass_gamma(b.m_velocity);
+        real gamma = mass_gamma(b.m_velocity);
 
         b.m_position +=  b.m_velocity * dt 
             + (b.m_force * std::pow(dt, 2) ) / (2 * gamma * b.m_mass);
@@ -361,13 +220,13 @@ void state_impl::verlet_step_a(real dt) {
         b.m_old_force = b.m_force;
 
         check_limits(b);
-        b.m_force = -b.m_velocity * m_world.viscosity ;
+        b.m_force = -b.m_velocity * viscosity ;
     }
 }
 
 void state_impl::verlet_step_b(real dt) {
-    for(auto& b:  boids) {
-        real gamma = m_world.mass_gamma(b.m_velocity);
+    for(boid& b:  boids) {
+        real gamma = mass_gamma(b.m_velocity);
 
         b.m_velocity 
             += (b.m_force + b.m_old_force) * dt / ( 2 * gamma * b.m_mass);
@@ -380,15 +239,15 @@ vector distance(point a, point b) {
 }
 
 template<class B, class T>
-vector compute_gravitational_force(const B& b, const T& t, state_impl::world_t& world){
+vector state_impl::compute_gravitational_force(const B& b, const T& t){
     vector dist = distance(t.m_position, b.m_position);
     real norm = norm_2(dist)  ;
     vector dir = dist / norm;
     vector force {};
 
     for(int i = 0; i < num_charges; ++i) {
-        force += dir * std::pow(norm + world.min_distance,-2) 
-            * ( world.constants[i] * t.m_charges[i] * b.m_charges[i] ) ;
+        force += dir * std::pow(norm + min_distance,-2) 
+            * ( constants[i] * t.m_charges[i] * b.m_charges[i] ) ;
     }
     
     return force;
@@ -412,16 +271,16 @@ void state_impl::compute_gravitational_forces() {
 #pragma omp parallel for
     for(int i = 0; i < size; ++i) {
         boid& b = boids[i];
-        for(auto& t: boids) {
+        for(boid& t: boids) {
             if(&t==&b) continue;
-            b.m_force += compute_gravitational_force(b, t, m_world);
+            b.m_force += compute_gravitational_force(b, t);
         }    
-        b.m_force += compute_gravitational_force(b, input, m_world);
+        b.m_force += compute_gravitational_force(b, input);
     }
 }
 
 void state_impl::compute_elastic_forces() {
-    BOOST_FOREACH(spring_arm& s, springs) {
+    for(spring_arm& s: springs) {
         boid& a = boids[s.a_index];
         boid& b = boids[s.b_index];
     
@@ -449,9 +308,8 @@ void state_impl::update_state() {
   
     const int iterations = 10 ;
     for(int i = 0; i < iterations; ++i) {
-        for(auto& b: boids) {
-            b.action(b);
-            //         std::cerr<<b.m_position<<":"<<b.m_velocity<<":"<<b.m_force<<"\n";
+        for(auto& actor: actors) {
+            actor(*this);
         }
         verlet_step_a(dt/iterations);
         compute_gravitational_forces();
@@ -483,7 +341,12 @@ double state_impl::get_time() const
 }
 
 state_impl::state_impl(int width, int height)
-    : delay(0)
+    : constants(charges_t{ {0.0001, 0.000001, -0.000001} })
+    , max_speed(0.3)
+    , damp(0.8)
+    , viscosity(0.)
+    , min_distance(0.001)
+    , delay(0)
     , width(width)
     , height(height)
     , x_max(1.0)
@@ -544,8 +407,6 @@ state_impl::update(world& w) {
     draw_nframes++;
   
     if (true || draw_end > draw_start+0.5) {
-    
-
         //if (my_frandom(1.0) < change_probability*0.3) random_big_change();
         draw_elapsed = draw_end-draw_start;
 	
